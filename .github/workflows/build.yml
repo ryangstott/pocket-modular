@@ -1,0 +1,87 @@
+name: Build app and website
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: build
+  cancel-in-progress: true
+
+jobs:
+  website:
+    name: Publish web app to GitHub Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+  apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Create the Android project around the web app
+        run: |
+          npm install --no-audit --no-fund @capacitor/core@6.2.0 @capacitor/cli@6.2.0 @capacitor/android@6.2.0
+          npx cap add android
+          npx cap sync android
+
+      - name: Icon, background colour and portrait lock
+        run: |
+          cp -r android-res/* android/app/src/main/res/
+          printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#121519</color>\n</resources>\n' > android/app/src/main/res/values/ic_launcher_background.xml
+          sed -i 's|android:name=".MainActivity"|android:name=".MainActivity"\n            android:screenOrientation="portrait"|' android/app/src/main/AndroidManifest.xml
+
+      - name: Signing key (the same key every build, so updates install over the top)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          mkdir -p ~/.android
+          if [ -z "$KEYSTORE_B64" ]; then echo "::error::Missing ANDROID_KEYSTORE_B64 secret"; exit 1; fi
+          echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../PocketModular.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PocketModular-apk
+          path: PocketModular.apk
+
+      - name: Publish as the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest PocketModular.apk \
+            --title "Pocket Modular (latest build)" \
+            --notes "Built from commit ${GITHUB_SHA::7}. On your phone, download PocketModular.apk and open it to install or update."

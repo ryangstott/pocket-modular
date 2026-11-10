@@ -1,0 +1,6 @@
+{
+  "appId": "com.ryangstott.pocketmodular",
+  "appName": "Pocket Modular",
+  "webDir": "web",
+  "android": { "backgroundColor": "#121519" }
+}
