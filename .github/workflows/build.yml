@@ -16,13 +16,18 @@ concurrency:
 
 jobs:
   website:
-    name: Publish web app to GitHub Pages
+    name: Publish web app and APK to GitHub Pages
+    needs: apk
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: PocketModular-apk
+          path: web
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -62,15 +67,36 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
           if [ -z "$KEYSTORE_PASSWORD" ]; then echo "::error::Add the KEYSTORE_PASSWORD secret (Settings > Secrets and variables > Actions)"; exit 1; fi
-          mkdir -p ~/.android
-          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in signing/keystore.enc -out ~/.android/debug.keystore -pass env:KEYSTORE_PASSWORD
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in signing/keystore.enc -out "$RUNNER_TEMP/pm.keystore" -pass env:KEYSTORE_PASSWORD
+          echo "PM_KEYSTORE=$RUNNER_TEMP/pm.keystore" >> "$GITHUB_ENV"
+          cat >> android/app/build.gradle <<'GRADLE'
+
+          android {
+              signingConfigs {
+                  pocketModular {
+                      storeFile file(System.getenv("PM_KEYSTORE"))
+                      storePassword "android"
+                      keyAlias "androiddebugkey"
+                      keyPassword "android"
+                  }
+              }
+              buildTypes {
+                  release { signingConfig signingConfigs.pocketModular }
+              }
+          }
+          GRADLE
 
       - name: Build APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-          cp app/build/outputs/apk/debug/app-debug.apk ../PocketModular.apk
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk ../PocketModular.apk
+
+      - name: Check the APK is signed with the Pocket Modular key
+        run: |
+          unzip -p PocketModular.apk 'META-INF/*.RSA' | keytool -printcert | tee cert.txt | grep -E "Owner|SHA256"
+          grep -q "CN=Pocket Modular" cert.txt || { echo "::error::APK is not signed with the Pocket Modular key"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:

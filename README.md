@@ -4,8 +4,8 @@ A modular synth for your phone that teaches you to build it. Start with an empty
 
 ## Get it
 
-- **Android app (APK):** [download the latest build](../../releases/latest/download/PocketModular.apk). Open it on your phone to install, or to update an earlier install.
-- **Web app:** published to GitHub Pages from the `web/` folder. Open it in Chrome on Android and choose *Install app*.
+- **Android app (APK):** [ryangstott.github.io/pocket-modular/PocketModular.apk](https://ryangstott.github.io/pocket-modular/PocketModular.apk). Open it on your phone to install, or to update an earlier install. Also attached to the [latest release](../../releases/latest).
+- **Web app:** [ryangstott.github.io/pocket-modular](https://ryangstott.github.io/pocket-modular/), published from the `web/` folder. Open it in Chrome on Android and choose *Install app*.
 
 Every push to `main` rebuilds both automatically (see `.github/workflows/build.yml`).
 
